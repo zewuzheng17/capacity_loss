@@ -1,0 +1,67 @@
+import  argparse
+import torch
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--task", type=str, default="Assault-v5")
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--scale-obs", type=int, default=0)
+    parser.add_argument("--eps-test", type=float, default=0.005)
+    parser.add_argument("--eps-train", type=float, default=1.)
+    parser.add_argument("--eps-train-final", type=float, default=0.05)
+    parser.add_argument("--buffer-size", type=int, default=5000)
+    parser.add_argument("--lr", type=float, default=0.0000625)
+    parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument("--num-atoms", type=int, default=51)
+    parser.add_argument("--v-min", type=float, default=-10.)
+    parser.add_argument("--v-max", type=float, default=10.)
+    parser.add_argument("--noisy-std", type=float, default=0.1)
+    parser.add_argument("--no-dueling", action="store_true", default=False)
+    parser.add_argument("--no-noisy", action="store_true", default=False)
+    parser.add_argument("--no-priority", action="store_true", default=False)
+    parser.add_argument("--alpha", type=float, default=0.5)
+    parser.add_argument("--beta", type=float, default=0.4)
+    parser.add_argument("--beta-final", type=float, default=1.)
+    parser.add_argument("--beta-anneal-step", type=int, default=5000000)
+    parser.add_argument("--no-weight-norm", action="store_true", default=False)
+    parser.add_argument("--n-step", type=int, default=3)
+    parser.add_argument("--target-update-freq", type=int, default=500)
+    parser.add_argument("--epoch", type=int, default=10)
+    parser.add_argument("--step-per-epoch", type=int, default=5000)
+    parser.add_argument("--step-per-collect", type=int, default=10)
+    parser.add_argument("--update-per-step", type=float, default=0.1)
+    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--training-num", type=int, default=10)
+    parser.add_argument("--test-num", type=int, default=10)
+    parser.add_argument("--logdir", type=str, default="log/")
+    parser.add_argument("--render", type=float, default=0.)
+    parser.add_argument(
+        "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
+    )
+    parser.add_argument("--frames-stack", type=int, default=4)
+    parser.add_argument("--resume-path", type=str, default=None)
+    parser.add_argument("--resume-id", type=str, default=None)
+    parser.add_argument(
+        "--logger",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+    )
+    parser.add_argument("--wandb-project", type=str, default="atari.benchmark")
+    parser.add_argument(
+        "--watch",
+        default=False,
+        action="store_true",
+        help="watch the play of pre-trained policy only"
+    )
+    parser.add_argument("--save-buffer-name", type=str, default=None)
+
+    # add supervised learning parameters
+    parser.add_argument("--test-capacity-length", type=int, default=2)
+    parser.add_argument("--supervised-epoch", type=int, default=200)
+    parser.add_argument("--supervised-data-size", type=int, default=2000)
+    parser.add_argument("--checkpoint-save-interval", type=int, default=5000)
+    return parser.parse_args()
+
+if __name__ == "__main__":
+    args = get_args()
