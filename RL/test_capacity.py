@@ -36,7 +36,12 @@ def setup_seed(seed):
 
 
 @ray.remote(num_gpus=0.3,num_cpus=2)
-def test_capacity(args, path_dict, buffer):
+def test_capacity(args) -> list[tuple]:
+    # get buffer
+    buffer = PrioritizedVectorReplayBuffer.load_hdf5(os.path.join(path_dict['buffer'], "data_{}.hdf5".format(args.add_infer)))
+    # get checkpoint
+    checkpoint = [torch.load(os.path.join(path_dict['policy'], "policy_{}M_{}.pth".format(i + 1, args.add_infer))) for i in range(args.test_capacity_length)]
+
     training_data, _ = buffer.sample(batch_size=args.supervised_data_size)
     training_data = training_data.obs
     # generate random network label
@@ -47,11 +52,14 @@ def test_capacity(args, path_dict, buffer):
         args.noisy_std,
         args.device,
         is_dueling=not args.no_dueling,
-        is_noisy=not args.no_noisy
+        is_noisy=not args.no_noisy,
+        add_infer=args.add_infer,
+        infer_multi_head_num=args.infer_multi_head_num,
+        infer_output_dim=args.infer_output_dim
     ).to(args.device)
 
     with torch.no_grad():
-        label, _, _ = net_random(training_data)
+        label, _, _, _ = net_random(training_data)
 
     sampler_idx = list(
         BatchSampler(RandomSampler(range(args.supervised_data_size)), batch_size=args.batch_size, drop_last=True))
@@ -66,14 +74,16 @@ def test_capacity(args, path_dict, buffer):
             args.noisy_std,
             args.device,
             is_dueling=not args.no_dueling,
-            is_noisy=not args.no_noisy
+            is_noisy=not args.no_noisy,
+            add_infer = args.add_infer,
+            infer_multi_head_num = args.infer_multi_head_num,
+            infer_output_dim = args.infer_output_dim
         ).to(args.device)
 
         # load optimizer state and network parameters from checkpoint
-        checkpoint = torch.load(os.path.join(path_dict['policy'], "policy_{}M.pth".format(i + 1)))
-        net.load_state_dict(checkpoint['model'])
+        net.load_state_dict(checkpoint[i]['model'])
         optim = torch.optim.Adam(net.parameters(), lr=args.lr)
-        optim.load_state_dict(checkpoint['optimizer'])
+        optim.load_state_dict(checkpoint[i]['optimizer'])
 
         # train for test capacity
         iter_num = 0
@@ -84,7 +94,7 @@ def test_capacity(args, path_dict, buffer):
                 labels = label[idx]
                 optim.zero_grad()
 
-                logits, _, _ = net(batch)
+                logits, _, _, _ = net(batch)
                 loss = F.mse_loss(logits, labels)
                 loss.backward()
                 optim.step()
@@ -98,7 +108,12 @@ def test_capacity(args, path_dict, buffer):
     return total_loss
 
 @ray.remote(num_cpus=2)
-def test_dimension(args, buffer):
+def test_dimension(args) -> list[tuple]:
+    # get buffer
+    buffer = PrioritizedVectorReplayBuffer.load_hdf5(os.path.join(path_dict['buffer'], "data_{}.hdf5".format(args.add_infer)))
+    # get checkpoint
+    checkpoint = [torch.load(os.path.join(path_dict['policy'], "policy_{}M_{}.pth".format(i + 1, args.add_infer))) for i in range(args.test_capacity_length)]
+
     representaion_data, _ = buffer.sample(batch_size=50000)
     representaion_data = representaion_data.obs
 
@@ -112,12 +127,19 @@ def test_dimension(args, buffer):
             args.noisy_std,
             'cpu',
             is_dueling=not args.no_dueling,
-            is_noisy=not args.no_noisy
+            is_noisy=not args.no_noisy,
+            add_infer = args.add_infer,
+            infer_multi_head_num = args.infer_multi_head_num,
+            infer_output_dim = args.infer_output_dim
         )
+
+        net_r.load_state_dict(checkpoint[i]['model'])
+        optim = torch.optim.Adam(net_r.parameters(), lr=args.lr)
+        optim.load_state_dict(checkpoint[i]['optimizer'])
 
         # get effective dimension
         with torch.no_grad():
-            _, _, net_represent = net_r(representaion_data)
+            _, _, net_represent, _ = net_r(representaion_data)
             effective_dimension = np.sum(np.array(torch.linalg.svdvals(net_represent)) > 0.01)
             total_effective_dimension.append((i, effective_dimension))
     return total_effective_dimension
@@ -127,6 +149,7 @@ if __name__ == "__main__":
     seeds = np.random.randint(100)
     setup_seed(seeds)
     args = get_args()
+    args.add_infer = int(args.add_infer)
     path_dict = create_path_dict(args)
     writer = SummaryWriter(path_dict['tensor_log'])
 
@@ -141,18 +164,16 @@ if __name__ == "__main__":
     )
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
-    # get buffer
-    buffer = PrioritizedVectorReplayBuffer.load_hdf5(os.path.join(path_dict['buffer'], "data0.hdf5"))
 
-    result_loss= ray.get([test_capacity.remote(args, path_dict, buffer) for i in range(5)])
-    result_dimension = ray.get([test_dimension.remote(args, buffer) for i in range(5)])
+    result_loss= ray.get([test_capacity.remote(args) for i in range(5)])
+    result_dimension = ray.get([test_dimension.remote(args) for i in range(5)])
     total_result_loss = reduce(lambda x, y: x + y, result_loss)
     total_result_dimension = reduce(lambda x, y: x + y, result_dimension)
 
-    files = open(os.path.join(path_dict['data'],"curves_loss.pkl"), 'wb')
+    files = open(os.path.join(path_dict['data'],"curves_loss_{}.pkl".format(args.add_infer)), 'wb')
     pickle.dump(total_result_loss, files)
     files.close()
-    files = open(os.path.join(path_dict['data'],"curves_EFdimension.pkl"), 'wb')
+    files = open(os.path.join(path_dict['data'],"curves_EFdimension_{}.pkl".format(args.add_infer)), 'wb')
     pickle.dump(total_result_dimension, files)
     files.close()
     writer.close()

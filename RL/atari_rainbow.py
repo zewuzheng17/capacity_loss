@@ -4,6 +4,7 @@ import os
 import pprint
 import numpy as np
 import torch
+import pickle
 
 from util.utils import create_path_dict
 from util.config_args import get_args
@@ -17,8 +18,12 @@ from tianshou.trainer import offpolicy_trainer
 from tianshou.utils import TensorboardLogger, WandbLogger
 
 
-
 def test_rainbow(args=get_args()):
+    if args.add_infer:
+        print("add infer for training")
+    else:
+        print("training without infer")
+    args.add_infer = int(args.add_infer)
     env, train_envs, test_envs = make_atari_env(
         args.task,
         args.seed,
@@ -45,7 +50,10 @@ def test_rainbow(args=get_args()):
         args.noisy_std,
         args.device,
         is_dueling=not args.no_dueling,
-        is_noisy=not args.no_noisy
+        is_noisy=not args.no_noisy,
+        add_infer=args.add_infer,
+        infer_multi_head_num=args.infer_multi_head_num,
+        infer_output_dim=args.infer_output_dim
     )
     optim = torch.optim.Adam(net.parameters(), lr=args.lr)
     # define policy, this is to define optimizer, the logit of computing q value, including noisy network,
@@ -58,12 +66,12 @@ def test_rainbow(args=get_args()):
         args.v_min,
         args.v_max,
         args.n_step,
-        target_update_freq=args.target_update_freq
+        target_update_freq=args.target_update_freq,
+        add_infer=args.add_infer,
+        infer_gradient_scale=args.infer_gradient_scale,
+        infer_target_scale=args.infer_target_scale
     ).to(args.device)
-    # load a previous policy, if training is suspended, we can resume the policy here
-    if args.resume_path:
-        policy.load_state_dict(torch.load(args.resume_path, map_location=args.device))
-        print("Loaded agent from: ", args.resume_path)
+
     # replay buffer: `save_last_obs` and `stack_num` can be removed together
     # when you have enough RAM
     if args.no_priority:
@@ -89,7 +97,6 @@ def test_rainbow(args=get_args()):
     train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
     test_collector = Collector(policy, test_envs, exploration_noise=True)
 
-
     # logger
     path_dict = create_path_dict(args)
     if args.logger == "wandb":
@@ -111,20 +118,53 @@ def test_rainbow(args=get_args()):
     def save_best_fn(policy):
         torch.save(policy.state_dict(), os.path.join(path_dict['policy'], "policy.pth"))
 
-    def save_checkpoint_fn(policy, epochs, buffer, step_per_epoch, save_interval=args.checkpoint_save_interval):
+    def save_checkpoint_fn(policy, epochs, buffer, step_per_epoch, test_reward: float,
+                           save_interval=args.checkpoint_save_interval):
         assert save_interval >= step_per_epoch  # ensure that we minimally save at least each epoch
 
         if epochs == 1:
             buffer.save_hdf5(os.path.join(path_dict['buffer'],
-                                               "data0.hdf5"))
-            print("The first replay buffer saved")
+                                          "data_{}.hdf5".format(args.add_infer)))
+            with open(os.path.join(path_dict['data'], "rewards_{}.pkl".format(args.add_infer)), "wb") as f:
+                pickle.dump([(epochs, test_reward)], f)
+            print("The first replay buffer and rewards stats saved")
+        else:
+            with open(os.path.join(path_dict['data'], "rewards_{}.pkl".format(args.add_infer)), "rb") as f:
+                reward_list = pickle.load(f)
+
+            reward_list += [(epochs, test_reward)]
+            with open(os.path.join(path_dict['data'], "rewards_{}.pkl".format(args.add_infer)), "wb") as f:
+                pickle.dump(reward_list, f)
+
         if epochs % int(save_interval / step_per_epoch) == 0:
             checkpoint = {
                 "model": policy.model.state_dict(),
                 "optimizer": policy.optim.state_dict()
             }
-            torch.save(checkpoint, os.path.join(path_dict['policy'], "policy_{}M.pth".format(
-                int(epochs / int(save_interval / step_per_epoch)))))
+            torch.save(checkpoint, os.path.join(path_dict['policy'], "policy_{}M_{}.pth".format(
+                int(epochs / int(save_interval / step_per_epoch)),args.add_infer)))
+
+            buffer.save_hdf5(os.path.join(path_dict['buffer'],
+                                          "data_recent_{}.hdf5".format(args.add_infer)))
+
+    def resume(path_dict, checkpoint_name, buffer_name):
+        buffer_path = os.path.join(path_dict['buffer'], buffer_name)
+        if os.path.exists(buffer_path):
+            train_collector.buffer = pickle.load(open(buffer_path, "rb"))
+            print("Successfully restore buffer.")
+        else:
+            print("Fail to restore buffer.")
+        checkpoint_path = os.path.join(path_dict['policy'], checkpoint_name)
+        if os.path.exists(checkpoint_path):
+            checkpoint = pickle.load(open(checkpoint_path, "rb"))
+            policy.load_state_dict(checkpoint['model'])
+            policy.optim.load_state_dict(checkpoint['optimizer'])
+            print("Successfully restore policy and optim.")
+        else:
+            print("Fail to restore policy and optim.")
+
+    if args.resume:
+        resume(path_dict, args.resume_checkpoint_name, args.resume_buffer_name)
 
     # the stopping criteria of training
     def stop_fn(mean_rewards):

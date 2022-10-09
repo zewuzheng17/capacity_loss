@@ -25,10 +25,13 @@ def plot_fig(path, xlabel, ylabel, title, save_destination):
 
 if __name__ == "__main__":
     args = get_args()
+    args.add_infer = int(args.add_infer)
     path_dict = create_path_dict(args)
-    plot_fig(path = os.path.join(path_dict['data'],"curves_loss.pkl"), xlabel="epoch", ylabel="MSE", title="Mean Squared error through training epoch" \
-             , save_destination=os.path.join(path_dict['picture'],"loss_curves.png"))
-    plot_fig(path = os.path.join(path_dict['data'],"curves_EFdimension.pkl"), xlabel="epoch", ylabel="Effective dimension", title="Feature rank through training epoch" \
-             , save_destination=os.path.join(path_dict['picture'],"Efdimension_curves.png"))
+    plot_fig(path = os.path.join(path_dict['data'],"curves_loss_{}.pkl".format(args.add_infer)), xlabel="epoch", ylabel="MSE", title="Mean Squared error through training epoch" \
+             , save_destination=os.path.join(path_dict['picture'],"loss_curves_{}.png".format(args.add_infer)))
+    plot_fig(path = os.path.join(path_dict['data'],"curves_EFdimension_{}.pkl".format(args.add_infer)), xlabel="epoch", ylabel="Effective dimension", title="Feature rank through training epoch" \
+             , save_destination=os.path.join(path_dict['picture'],"Efdimension_curves_{}.png".format(args.add_infer)))
+    plot_fig(path = os.path.join(path_dict['data'],"rewards_{}.pkl".format(args.add_infer)), xlabel="epoch", ylabel="Rewards", title="rewards through training epoch" \
+             , save_destination=os.path.join(path_dict['picture'],"Rewards_curves_{}.png".format(args.add_infer)))
 
 #os.system('rm -rf ./data/Store_datatype*.pickle')
