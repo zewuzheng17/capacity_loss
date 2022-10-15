@@ -4,7 +4,7 @@ import torch
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="MontezumaRevenge-v5")
+    parser.add_argument("--task", type=str, default="PongNoFrameskip-v4")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--scale-obs", type=int, default=0)
     parser.add_argument("--eps-test", type=float, default=0.005)
@@ -29,8 +29,8 @@ def get_args():
     parser.add_argument("--target-update-freq", type=int, default=500)
     parser.add_argument("--epoch", type=int, default=200)
     parser.add_argument("--step-per-epoch", type=int, default=500000)
-    parser.add_argument("--step-per-collect", type=int, default=10)
-    parser.add_argument("--update-per-step", type=float, default=0.1)
+    parser.add_argument("--step-per-collect", type=int, default=20)
+    parser.add_argument("--update-per-step", type=float, default=0.05)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--training-num", type=int, default=10)
     parser.add_argument("--test-num", type=int, default=10)
@@ -59,15 +59,17 @@ def get_args():
     parser.add_argument("--save-buffer-name", type=str, default=None)
 
     # add supervised learning parameters
-    parser.add_argument("--test-capacity-length", type=int, default=85)
-    parser.add_argument("--supervised-epoch", type=int, default=20)
-    parser.add_argument("--supervised-data-size", type=int, default=5000)
+    parser.add_argument("--test-capacity-length", type=int, default=50)
+    parser.add_argument("--supervised-epoch", type=int, default=100)
+    parser.add_argument("--supervised-data-size", type=int, default=3200)
     parser.add_argument("--checkpoint-save-interval", type=int, default=1000000)
     parser.add_argument("--add-infer", action='store_true')
     parser.add_argument("--infer-multi-head-num", type=int, default=10)
-    parser.add_argument("--infer-output-dim", type=int, default=10)
+    parser.add_argument("--infer-output-dim", type=int, default=6)
     parser.add_argument("--infer_gradient_scale", type=float, default=0.1)
     parser.add_argument("--infer-target_scale", type=float, default=100.)
+    parser.add_argument("--grad-norm", action="store_true")
+    parser.add_argument("--collect-test-statistics", action="store_true")
     return parser.parse_args()
 
 

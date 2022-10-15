@@ -19,12 +19,6 @@ from torch.utils.data import RandomSampler, BatchSampler
 from tianshou.data import PrioritizedVectorReplayBuffer
 
 
-def setup_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-
-
 # def copy_from_policy_dict(source):
 #     new_dict = {}
 #     patt = re.compile(r'model_old')
@@ -38,9 +32,9 @@ def setup_seed(seed):
 @ray.remote(num_gpus=0.3,num_cpus=2)
 def test_capacity(args) -> list[tuple]:
     # get buffer
-    buffer = PrioritizedVectorReplayBuffer.load_hdf5(os.path.join(path_dict['buffer'], "data_{}.hdf5".format(args.add_infer)))
+    buffer = PrioritizedVectorReplayBuffer.load_hdf5(os.path.join(path_dict['buffer'], "data_i{}_s{}.hdf5".format(args.add_infer, args.seed)))
     # get checkpoint
-    checkpoint = [torch.load(os.path.join(path_dict['policy'], "policy_{}M_{}.pth".format(i + 1, args.add_infer))) for i in range(args.test_capacity_length)]
+    checkpoint = [torch.load(os.path.join(path_dict['policy'], "policy_i{}_s{}_{}.pth".format( args.add_infer, args.seed,i + 1))) for i in range(args.test_capacity_length)]
 
     training_data, _ = buffer.sample(batch_size=args.supervised_data_size)
     training_data = training_data.obs
@@ -58,27 +52,27 @@ def test_capacity(args) -> list[tuple]:
         infer_output_dim=args.infer_output_dim
     ).to(args.device)
 
-    with torch.no_grad():
-        label, _, _, _ = net_random(training_data)
+    label, _, _, _ = net_random(training_data)
+    label = label.detach() * 10
 
     sampler_idx = list(
         BatchSampler(RandomSampler(range(args.supervised_data_size)), batch_size=args.batch_size, drop_last=True))
 
     total_loss = []
+    net = Rainbow(
+        *args.state_shape,
+        args.action_shape,
+        args.num_atoms,
+        args.noisy_std,
+        args.device,
+        is_dueling=not args.no_dueling,
+        is_noisy=not args.no_noisy,
+        add_infer=args.add_infer,
+        infer_multi_head_num=args.infer_multi_head_num,
+        infer_output_dim=args.infer_output_dim
+    ).to(args.device)
+
     for i in tqdm(range(args.test_capacity_length)): #
-        # initialize rainbow network to load from checkpoint
-        net = Rainbow(
-            *args.state_shape,
-            args.action_shape,
-            args.num_atoms,
-            args.noisy_std,
-            args.device,
-            is_dueling=not args.no_dueling,
-            is_noisy=not args.no_noisy,
-            add_infer = args.add_infer,
-            infer_multi_head_num = args.infer_multi_head_num,
-            infer_output_dim = args.infer_output_dim
-        ).to(args.device)
 
         # load optimizer state and network parameters from checkpoint
         net.load_state_dict(checkpoint[i]['model'])
@@ -86,7 +80,6 @@ def test_capacity(args) -> list[tuple]:
         optim.load_state_dict(checkpoint[i]['optimizer'])
 
         # train for test capacity
-        iter_num = 0
         loss_epoch = 0
         for j in range(args.supervised_epoch):
             for idx in sampler_idx:
@@ -98,41 +91,36 @@ def test_capacity(args) -> list[tuple]:
                 loss = F.mse_loss(logits, labels)
                 loss.backward()
                 optim.step()
-                if j == args.supervised_epoch - 1:
-                    loss_epoch += loss.item()
-                    iter_num += 1
             # if writer is not None:
             #     writer.add_scalar("MSE", j, loss.item())
-        assert iter_num != 0
-        total_loss.append((i, loss_epoch / iter_num))
+        total_loss.append((i, loss.item()))
     return total_loss
 
-@ray.remote(num_cpus=2)
 def test_dimension(args) -> list[tuple]:
     # get buffer
-    buffer = PrioritizedVectorReplayBuffer.load_hdf5(os.path.join(path_dict['buffer'], "data_{}.hdf5".format(args.add_infer)))
+    buffer = PrioritizedVectorReplayBuffer.load_hdf5(os.path.join(path_dict['buffer'], "data_i{}_s{}.hdf5".format(args.add_infer, args.seed)))
     # get checkpoint
-    checkpoint = [torch.load(os.path.join(path_dict['policy'], "policy_{}M_{}.pth".format(i + 1, args.add_infer))) for i in range(args.test_capacity_length)]
+    checkpoint = [torch.load(os.path.join(path_dict['policy'], "policy_i{}_s{}_{}.pth".format(args.seed, args.add_infer, i + 1))) for i in range(args.test_capacity_length)]
 
     representaion_data, _ = buffer.sample(batch_size=50000)
     representaion_data = representaion_data.obs
 
     total_effective_dimension = []
-    for i in tqdm(range(args.test_capacity_length)):
-        # cpu net for computing large batch size
-        net_r = Rainbow(
-            *args.state_shape,
-            args.action_shape,
-            args.num_atoms,
-            args.noisy_std,
-            'cpu',
-            is_dueling=not args.no_dueling,
-            is_noisy=not args.no_noisy,
-            add_infer = args.add_infer,
-            infer_multi_head_num = args.infer_multi_head_num,
-            infer_output_dim = args.infer_output_dim
-        )
+    # cpu net for computing large batch size
+    net_r = Rainbow(
+        *args.state_shape,
+        args.action_shape,
+        args.num_atoms,
+        args.noisy_std,
+        'cpu',
+        is_dueling=not args.no_dueling,
+        is_noisy=not args.no_noisy,
+        add_infer=args.add_infer,
+        infer_multi_head_num=args.infer_multi_head_num,
+        infer_output_dim=args.infer_output_dim
+    )
 
+    for i in tqdm(range(args.test_capacity_length)):
         net_r.load_state_dict(checkpoint[i]['model'])
         optim = torch.optim.Adam(net_r.parameters(), lr=args.lr)
         optim.load_state_dict(checkpoint[i]['optimizer'])
@@ -146,8 +134,6 @@ def test_dimension(args) -> list[tuple]:
 
 
 if __name__ == "__main__":
-    seeds = np.random.randint(100)
-    setup_seed(seeds)
     args = get_args()
     args.add_infer = int(args.add_infer)
     path_dict = create_path_dict(args)
@@ -166,14 +152,13 @@ if __name__ == "__main__":
     args.action_shape = env.action_space.shape or env.action_space.n
 
     result_loss= ray.get([test_capacity.remote(args) for i in range(5)])
-    result_dimension = ray.get([test_dimension.remote(args) for i in range(5)])
     total_result_loss = reduce(lambda x, y: x + y, result_loss)
-    total_result_dimension = reduce(lambda x, y: x + y, result_dimension)
+    total_result_dimension = test_dimension(args)
 
-    files = open(os.path.join(path_dict['data'],"curves_loss_{}.pkl".format(args.add_infer)), 'wb')
+    files = open(os.path.join(path_dict['data'],"curves_loss_i{}_s{}.pkl".format(args.add_infer, args.seed)), 'wb')
     pickle.dump(total_result_loss, files)
     files.close()
-    files = open(os.path.join(path_dict['data'],"curves_EFdimension_{}.pkl".format(args.add_infer)), 'wb')
+    files = open(os.path.join(path_dict['data'],"curves_EFdimension_i{}_s{}.pkl".format(args.add_infer, args.seed)), 'wb')
     pickle.dump(total_result_dimension, files)
     files.close()
     writer.close()
