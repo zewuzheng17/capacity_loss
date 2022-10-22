@@ -59,6 +59,7 @@ class DQN(nn.Module):
             info: Dict[str, Any] = {},
     ) -> Tuple[torch.Tensor, Any]:
         r"""Mapping: s -> Q(s, \*)."""
+        obs = obs / 255.0
         obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
         return self.net(obs), state
 
@@ -141,10 +142,11 @@ class Rainbow(DQN):
                 linear(512, self.num_atoms)
             )
         if self.add_infer:
-            self.multi_head_output = nn.Sequential(
-                nn.Linear(self.output_dim, 512), nn.ReLU(inplace=True),
-                nn.Linear(512, self.infer_multi_head_num * self.infer_output_dim)
-            )
+            # self.multi_head_output = nn.Sequential(
+            #     nn.Linear(self.output_dim, 512), nn.ReLU(inplace=True),
+            #     nn.Linear(512, self.infer_multi_head_num * self.infer_output_dim)
+            # )
+            self.multi_head_output = nn.Linear(512, self.infer_multi_head_num * self.infer_output_dim)
         self.output_dim = self.action_num * self.num_atoms
 
 
@@ -168,7 +170,7 @@ class Rainbow(DQN):
             logits = q
 
         if self.add_infer:
-            multi_head_output = self.multi_head_output(obs)
+            multi_head_output = self.multi_head_output(q_representation)
             multi_head_output = multi_head_output.view(-1,  self.infer_output_dim, self.infer_multi_head_num)
         else:
             multi_head_output = None

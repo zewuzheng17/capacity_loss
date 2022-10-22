@@ -4,7 +4,7 @@ import torch
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="PongNoFrameskip-v4")
+    parser.add_argument("--task", type=str, default="MontezumaRevenge-v5")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--scale-obs", type=int, default=0)
     parser.add_argument("--eps-test", type=float, default=0.005)
@@ -17,7 +17,7 @@ def get_args():
     parser.add_argument("--v-min", type=float, default=-10.)
     parser.add_argument("--v-max", type=float, default=10.)
     parser.add_argument("--noisy-std", type=float, default=0.1)
-    parser.add_argument("--no-dueling", action="store_true", default=False)
+    parser.add_argument("--no-dueling", action="store_true", default=True) # always no dueling
     parser.add_argument("--no-noisy", action="store_true", default=False)
     parser.add_argument("--no-priority", action="store_true", default=False)
     parser.add_argument("--alpha", type=float, default=0.5)
@@ -32,8 +32,8 @@ def get_args():
     parser.add_argument("--step-per-collect", type=int, default=20)
     parser.add_argument("--update-per-step", type=float, default=0.05)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--training-num", type=int, default=10)
-    parser.add_argument("--test-num", type=int, default=10)
+    parser.add_argument("--training-num", type=int, default=20)
+    parser.add_argument("--test-num", type=int, default=20)
     parser.add_argument("--logdir", type=str, default="log/")
     parser.add_argument("--render", type=float, default=0.)
     parser.add_argument(
@@ -59,17 +59,20 @@ def get_args():
     parser.add_argument("--save-buffer-name", type=str, default=None)
 
     # add supervised learning parameters
-    parser.add_argument("--test-capacity-length", type=int, default=50)
-    parser.add_argument("--supervised-epoch", type=int, default=100)
-    parser.add_argument("--supervised-data-size", type=int, default=3200)
-    parser.add_argument("--checkpoint-save-interval", type=int, default=1000000)
+    parser.add_argument("--test-capacity-length", type=int, default=25)
+    parser.add_argument("--supervised-epoch", type=int, default=10000)
+    parser.add_argument("--supervised-data-size", type=int, default=1024)
+    parser.add_argument("--checkpoint-save-interval", type=int, default=2000000)
     parser.add_argument("--add-infer", action='store_true')
     parser.add_argument("--infer-multi-head-num", type=int, default=10)
-    parser.add_argument("--infer-output-dim", type=int, default=6)
+    parser.add_argument("--infer-output-dim", type=int, default=1)
     parser.add_argument("--infer_gradient_scale", type=float, default=0.1)
-    parser.add_argument("--infer-target_scale", type=float, default=100.)
+    parser.add_argument("--infer-target_scale", type=float, default=10.)
     parser.add_argument("--grad-norm", action="store_true")
-    parser.add_argument("--collect-test-statistics", action="store_true")
+    parser.add_argument("--collect-test-statistics", action="store_false")
+    parser.add_argument("--test-batch-size", type=int, default=32)
+    parser.add_argument("--global-grad-norm", action = "store_true")
+    parser.add_argument("--policy-save-seed", type=int, default=0)
     return parser.parse_args()
 
 

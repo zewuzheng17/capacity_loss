@@ -1,4 +1,5 @@
 import os
+from typing import List, Tuple
 
 # create log path
 def create_path_dict(args):
@@ -21,3 +22,12 @@ def create_path_dict(args):
             os.makedirs(path_dict[keys])
     return path_dict
 
+# input data, return a smoothed version
+def smooth(data: List[Tuple], moving_rate: float = 0.6) -> List[Tuple]:
+    smoothed_data = []
+    for i in range(len(data)):
+        if i == len(data) - 1:
+            smoothed_data.append(data[i])
+        else:
+            smoothed_data.append((data[i][0], data[i][1] * moving_rate + data[i+1][1] * (1 - moving_rate)))
+    return smoothed_data

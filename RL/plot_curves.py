@@ -8,6 +8,7 @@ from functools import reduce
 from util.config_args import get_args
 from util.utils import create_path_dict
 
+
 def plot_fig_mix(base_path, plot_type, plot_num, seed_num, xlabel, ylabel, hue, title, save_destination):
     ## load training data
     sns.set()
@@ -17,7 +18,7 @@ def plot_fig_mix(base_path, plot_type, plot_num, seed_num, xlabel, ylabel, hue, 
     for i in range(plot_num):
         data[i] = []
         for j in range(seed_num):
-            path = os.path.join(base_path, plot_type + "_i" + str(i) + "_s" + str(j))
+            path = os.path.join(base_path, plot_type + "_i" + str(i) + "_s" + str(j)+".pkl")
             with open(path, 'rb') as f:
                 files = pickle.load(f)
                 data[i] += list(map(lambda x: list(x)+[hue[i]], files)) # hue[i]
@@ -27,6 +28,8 @@ def plot_fig_mix(base_path, plot_type, plot_num, seed_num, xlabel, ylabel, hue, 
     sns.lineplot(x=xlabel, y=ylabel, data=df ,hue="type")  # ,hue="network type"
     plt.xlabel = xlabel
     plt.ylabel = ylabel
+    # if plot_type == "curves_loss":
+    #     plt.ylim(0, 2e-5)
     plt.title = title
     plt.legend(loc="upper left", fontsize="x-small")
     fig.savefig(save_destination)
@@ -37,7 +40,7 @@ def plot_fig_single(base_path, plot_type, plot_id, seed_num, xlabel, ylabel, hue
 
     data = []
     for i in range(seed_num):
-        path = os.path.join(base_path, plot_type + "_i" + str(plot_id) + "_s" + str(i))
+        path = os.path.join(base_path, plot_type + "_i" + str(plot_id) + "_s" + str(i) + ".pkl")
         with open(path, 'rb') as f:
             files = pickle.load(f)
             data += list(map(lambda x: list(x)+[hue[plot_id]], files)) # hue[i]
@@ -46,6 +49,8 @@ def plot_fig_single(base_path, plot_type, plot_id, seed_num, xlabel, ylabel, hue
     sns.lineplot(x=xlabel, y=ylabel, data=df ,hue="type")  # ,hue="network type"
     plt.xlabel = xlabel
     plt.ylabel = ylabel
+    if plot_type == "curves_loss":
+        plt.ylim(0, 2e-5)
     plt.title = title
     plt.legend(loc="upper left", fontsize="x-small")
     fig.savefig(save_destination)
@@ -56,7 +61,7 @@ if __name__ == "__main__":
     plot_id = int(args.add_infer)
     path_dict = create_path_dict(args)
     plot_num = 2
-    seed_num = 3
+    seed_num = 1
 
     if plot_num > 1:
         plot_fig_mix(base_path = path_dict['data'], plot_type="curves_loss", plot_num = plot_num, seed_num = seed_num, xlabel='epoch', \
@@ -68,8 +73,9 @@ if __name__ == "__main__":
                  , save_destination=os.path.join(path_dict['picture'],"Efdimension_curves.png"))
 
         plot_fig_mix(base_path = path_dict['data'], plot_type="rewards", plot_num = plot_num, seed_num = seed_num,xlabel="epoch", \
-                 ylabel="Rewards", hue = ["rainbow", "rainbow + infer"], title="rewards through training epoch" \
-                 , save_destination=os.path.join(path_dict['picture'],"Rewards_curves.png"))
+                 ylabel="return", hue = ["rainbow", "rainbow + infer"], title="rewards through training epoch" \
+                 , save_destination=os.path.join(path_dict['picture'],"reward_curves.png"))
+
     else:
         plot_fig_single(base_path=path_dict['data'], plot_type="curves_loss", plot_id=plot_id, seed_num=seed_num,
                      xlabel='epoch', \
@@ -82,9 +88,8 @@ if __name__ == "__main__":
                      title="Feature rank through training epoch" \
                      , save_destination=os.path.join(path_dict['picture'], "Efdimension_curves_i{}.png".format(plot_id)))
 
-        plot_fig_single(base_path=path_dict['data'], plot_type="rewards", plot_id=plot_id, seed_num=seed_num,
-                     xlabel="epoch", \
-                     ylabel="Rewards", hue=["rainbow", "rainbow + infer"], title="rewards through training epoch" \
-                     , save_destination=os.path.join(path_dict['picture'], "Rewards_curves_i{].png".format(plot_id)))
+        plot_fig_single(base_path=path_dict['data'], plot_type="rewards", plot_id=plot_id, seed_num=seed_num, xlabel="epoch", \
+                 ylabel="return", hue=["rainbow", "rainbow + infer"], title="rewards through training epoch" \
+                 , save_destination=os.path.join(path_dict['picture'], "reward_curves_i{}.png".format(plot_id)))
 
 #os.system('rm -rf ./data/Store_datatype*.pickle')

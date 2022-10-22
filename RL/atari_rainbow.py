@@ -19,6 +19,11 @@ from tianshou.utils import TensorboardLogger, WandbLogger
 
 
 def test_rainbow(args=get_args()):
+    # set working numbers of gpu and seeds
+    torch.set_num_threads(int(args.training_num) + 1)
+    args.seed = np.random.randint(100)
+    print("seeds:", args.seed)
+
     if args.add_infer:
         print("add infer for training")
     else:
@@ -70,7 +75,8 @@ def test_rainbow(args=get_args()):
         target_update_freq=args.target_update_freq,
         add_infer=args.add_infer,
         infer_gradient_scale=args.infer_gradient_scale,
-        infer_target_scale=args.infer_target_scale
+        infer_target_scale=args.infer_target_scale,
+        global_grad_norm = args.global_grad_norm
     ).to(args.device)
 
     # replay buffer: `save_last_obs` and `stack_num` can be removed together
@@ -98,17 +104,17 @@ def test_rainbow(args=get_args()):
     path_dict = create_path_dict(args)
 
     if args.resume:
-        buffer_path = os.path.join(path_dict['buffer'], "data_recent_i{}_s{}.hdf5".format(args.add_infer, args.seed))
+        buffer_path = os.path.join(path_dict['buffer'], "data_recent_i{}_s{}.hdf5".format(args.add_infer, args.policy_save_seed))
         if os.path.exists(buffer_path):
             buffer = buffer.load_hdf5(buffer_path)
-            print("Successfully restore buffer from {}.".format("data_recent_i{}_s{}.hdf5".format(args.add_infer, args.seed)))
+            print("Successfully restore buffer from {}.".format("data_recent_i{}_s{}.hdf5".format(args.add_infer, args.policy_save_seed)))
         else:
             raise Exception("Fail to restore buffer:{} ,pls check if file exist".format(buffer_path))
 
         for i in range(100, 0, -1):
             if os.path.exists(
-                    os.path.join(path_dict['policy'], "policy_i{}_s{}_{}.pth".format(args.add_infer, args.seed, i))):
-                checkpoint_path = os.path.join(path_dict['policy'], "policy_i{}_s{}_{}.pth".format(args.add_infer, args.seed, i))
+                    os.path.join(path_dict['policy'], "policy_i{}_s{}_{}.pth".format(args.add_infer, args.policy_save_seed, i))):
+                checkpoint_path = os.path.join(path_dict['policy'], "policy_i{}_s{}_{}.pth".format(args.add_infer, args.policy_save_seed, i))
                 checkpoint = torch.load(checkpoint_path)
                 policy.model.load_state_dict(checkpoint['model'])
                 policy.optim.load_state_dict(checkpoint['optimizer'])
@@ -131,7 +137,11 @@ def test_rainbow(args=get_args()):
             config=args,
             project=args.wandb_project,
         )
-    writer = SummaryWriter(os.path.join(path_dict['tensor_log'],str(args.add_infer)))
+    # tensor_log
+    ts_log_path = os.path.join(path_dict['tensor_log'],str(args.add_infer) + str(args.policy_save_seed))
+    if not os.path.exists(ts_log_path):
+        os.makedirs(ts_log_path)
+    writer = SummaryWriter(ts_log_path)
     writer.add_text("args", str(args))
     if args.logger == "tensorboard":
         logger = TensorboardLogger(writer)
@@ -148,28 +158,29 @@ def test_rainbow(args=get_args()):
 
         if epochs == 1:
             buffer.save_hdf5(os.path.join(path_dict['buffer'],
-                                          "data_i{}_s{}.hdf5".format(args.add_infer, args.seed)))
-            with open(os.path.join(path_dict['data'], "rewards_i{}_s{}.pkl".format(args.add_infer, args.seed)), "wb") as f:
+                                          "data_i{}_s{}.hdf5".format(args.add_infer, args.policy_save_seed)))
+            with open(os.path.join(path_dict['data'], "rewards_i{}_s{}.pkl".format(args.add_infer, args.policy_save_seed)), "wb") as f:
                 pickle.dump([(epochs, test_reward)], f)
             print("The first replay buffer and rewards stats saved")
-        else:
-            with open(os.path.join(path_dict['data'], "rewards_i{}_s{}.pkl".format(args.add_infer,args.seed)), "rb") as f:
+        elif epochs % int(save_interval / step_per_epoch) == 0:
+            with open(os.path.join(path_dict['data'], "rewards_i{}_s{}.pkl".format(args.add_infer,args.policy_save_seed)), "rb") as f:
                 reward_list = pickle.load(f)
 
             reward_list += [(epochs, test_reward)]
-            with open(os.path.join(path_dict['data'], "rewards_i{}_s{}.pkl".format(args.add_infer, args.seed)), "wb") as f:
+            with open(os.path.join(path_dict['data'], "rewards_i{}_s{}.pkl".format(args.add_infer,args.policy_save_seed)), "wb") as f:
                 pickle.dump(reward_list, f)
 
-        if epochs % int(save_interval / step_per_epoch) == 0:
             checkpoint = {
                 "model": policy.model.state_dict(),
                 "optimizer": policy.optim.state_dict()
             }
             torch.save(checkpoint, os.path.join(path_dict['policy'], "policy_i{}_s{}_{}.pth".format(
-                args.add_infer, args.seed, int(epochs / int(save_interval / step_per_epoch)) )))
+                args.add_infer, args.policy_save_seed, int(epochs / int(save_interval / step_per_epoch)) )))
 
-            buffer.save_hdf5(os.path.join(path_dict['buffer'],
-                                          "data_recent_i{}_s{}.hdf5".format(args.add_infer, args.seed)))
+            # buffer.save_hdf5(os.path.join(path_dict['buffer'],
+            #                               "data_i{}_s{}_{}.hdf5".format(args.add_infer, args.policy_save_seed, \
+            #                                                             int(epochs / int(save_interval / step_per_epoch))))\
+            #                  , compression=True)
 
 
     # the stopping criteria of training
