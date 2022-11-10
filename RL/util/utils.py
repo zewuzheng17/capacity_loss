@@ -1,10 +1,10 @@
 import os
 from typing import List, Tuple
 
+
 # create log path
 def create_path_dict(args):
     # args.abs_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
-    args.algo_name = "rainbow"
     log_name = os.path.join(args.task, args.algo_name)  # , str(args.seed), now
     log_path = os.path.join(args.logdir, log_name)
 
@@ -22,12 +22,16 @@ def create_path_dict(args):
             os.makedirs(path_dict[keys])
     return path_dict
 
+
 # input data, return a smoothed version
-def smooth(data: List[Tuple], moving_rate: float = 0.6) -> List[Tuple]:
+def smooth(data: List[List], moving_rate=(0.5, 0.3, 0.2)) -> List[List]:
     smoothed_data = []
     for i in range(len(data)):
-        if i == len(data) - 1:
+        to_bound = len(data) - i
+        if to_bound < len(moving_rate):
             smoothed_data.append(data[i])
         else:
-            smoothed_data.append((data[i][0], data[i][1] * moving_rate + data[i+1][1] * (1 - moving_rate)))
+            smoothed_data.append([data[i][0],
+                                  data[i][1] * moving_rate[0] + data[i + 1][1] * moving_rate[1] + data[i + 2][1] *
+                                  moving_rate[2], data[i][2]])
     return smoothed_data

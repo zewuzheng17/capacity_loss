@@ -132,13 +132,15 @@ class Rainbow(DQN):
 
         self.q_representation = linear(self.output_dim, 512)
         self.Q = nn.Sequential(
+            # linear(self.output_dim, 512),
             nn.ReLU(inplace=True),
             linear(512, self.action_num * self.num_atoms)
         )
         self._is_dueling = is_dueling
         if self._is_dueling:
+            self.v_representation = linear(self.output_dim, 512)
             self.V = nn.Sequential(
-                linear(self.output_dim, 512), nn.ReLU(inplace=True),
+                nn.ReLU(inplace=True),
                 linear(512, self.num_atoms)
             )
         if self.add_infer:
@@ -146,7 +148,9 @@ class Rainbow(DQN):
             #     nn.Linear(self.output_dim, 512), nn.ReLU(inplace=True),
             #     nn.Linear(512, self.infer_multi_head_num * self.infer_output_dim)
             # )
-            self.multi_head_output = nn.Linear(512, self.infer_multi_head_num * self.infer_output_dim)
+            self.multi_head_output_v = nn.Linear(512, self.infer_multi_head_num * self.infer_output_dim)
+            self.multi_head_output_q = nn.Linear(512, self.infer_multi_head_num * self.infer_output_dim)
+
         self.output_dim = self.action_num * self.num_atoms
 
 
@@ -163,20 +167,26 @@ class Rainbow(DQN):
         q = self.Q(q_representation)
         q = q.view(-1, self.action_num, self.num_atoms)
         if self._is_dueling:
-            v = self.V(obs)
+            v_representation = self.v_representation(obs)
+            v = self.V(v_representation)
             v = v.view(-1, 1, self.num_atoms)
             logits = q - q.mean(dim=1, keepdim=True) + v
         else:
             logits = q
+            v_representation = None
 
-        if self.add_infer:
-            multi_head_output = self.multi_head_output(q_representation)
-            multi_head_output = multi_head_output.view(-1,  self.infer_output_dim, self.infer_multi_head_num)
+        if self.add_infer and self._is_dueling:
+            # multi_head_output = self.multi_head_output(obs)
+            multi_head_output_v = self.multi_head_output_v(v_representation)
+            multi_head_output_v = multi_head_output_v.view(-1,  self.infer_output_dim, self.infer_multi_head_num)
+            multi_head_output_q = self.multi_head_output_q(q_representation)
+            multi_head_output_q = multi_head_output_q.view(-1, self.infer_output_dim, self.infer_multi_head_num)
         else:
-            multi_head_output = None
+            multi_head_output_q = None
+            multi_head_output_v = None
         # perform softmax operation over the output of value of action
         probs = logits.softmax(dim=2)
-        return probs, state, q_representation, multi_head_output
+        return probs, state, v_representation, multi_head_output_q, multi_head_output_v #
 
 
 class QRDQN(DQN):

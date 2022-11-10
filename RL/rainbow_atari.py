@@ -20,7 +20,7 @@ from tianshou.utils import TensorboardLogger, WandbLogger
 
 def test_rainbow(args=get_args()):
     # set working numbers of gpu and seeds
-    torch.set_num_threads(int(args.training_num) + 1)
+    torch.set_num_threads(int(args.training_num) + 3)
     args.seed = np.random.randint(100)
     print("seeds:", args.seed)
 
@@ -76,7 +76,9 @@ def test_rainbow(args=get_args()):
         add_infer=args.add_infer,
         infer_gradient_scale=args.infer_gradient_scale,
         infer_target_scale=args.infer_target_scale,
-        global_grad_norm = args.global_grad_norm
+        global_grad_norm = args.global_grad_norm,
+        reset_policy = args.reset_policy,
+        reset_policy_interval = args.reset_policy_interval
     ).to(args.device)
 
     # replay buffer: `save_last_obs` and `stack_num` can be removed together
@@ -101,12 +103,13 @@ def test_rainbow(args=get_args()):
             weight_norm=not args.no_weight_norm
         )
 
+    args.algo_name = 'rainbow'
     path_dict = create_path_dict(args)
 
     if args.resume:
         buffer_path = os.path.join(path_dict['buffer'], "data_recent_i{}_s{}.hdf5".format(args.add_infer, args.policy_save_seed))
         if os.path.exists(buffer_path):
-            buffer = buffer.load_hdf5(buffer_path)
+            buffer.load_hdf5(buffer_path)
             print("Successfully restore buffer from {}.".format("data_recent_i{}_s{}.hdf5".format(args.add_infer, args.policy_save_seed)))
         else:
             raise Exception("Fail to restore buffer:{} ,pls check if file exist".format(buffer_path))
@@ -177,19 +180,9 @@ def test_rainbow(args=get_args()):
             torch.save(checkpoint, os.path.join(path_dict['policy'], "policy_i{}_s{}_{}.pth".format(
                 args.add_infer, args.policy_save_seed, int(epochs / int(save_interval / step_per_epoch)) )))
 
-            # buffer.save_hdf5(os.path.join(path_dict['buffer'],
-            #                               "data_i{}_s{}_{}.hdf5".format(args.add_infer, args.policy_save_seed, \
-            #                                                             int(epochs / int(save_interval / step_per_epoch))))\
-            #                  , compression=True)
-
 
     # the stopping criteria of training
     def stop_fn(mean_rewards):
-        # if env.spec.reward_threshold:
-        #     return mean_rewards >= env.spec.reward_threshold
-        # elif "Pong" in args.task:
-        #     return mean_rewards >= 20
-        # else:
         return False
 
     # set the learning rate, prioritize experience replay rate alpha and beta..

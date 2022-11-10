@@ -32,11 +32,11 @@ for i in group_dict.keys():
         [x.append(group_dict[i]) for x in data]
         result += data
 
-with open('./data/Store_datatype_i{}_{}.pickle'.format("False", 10), 'rb') as f:
-    files = pickle.load(f)
-    data = list(map(list, files))
-    [x.append("No infer") for x in data]
-    result += data
+# with open('./data/Store_datatype_i{}_{}.pickle'.format("False", 10), 'rb') as f:
+#     files = pickle.load(f)
+#     data = list(map(list, files))
+#     [x.append("No infer") for x in data]
+#     result += data
 
 def plot_fig(data, x, y, hue, args):
     fig = plt.figure()
@@ -51,7 +51,7 @@ sns.set()
 
 if args.multi_network:
     fig = plt.figure()
-    df = pd.DataFrame(result, columns = ['epochs','MSE','network type'])
+    df = pd.DataFrame(result, columns = ['epochs','MSE', 'representation_mean', 'ef_dimension','network type'])
     plot_fig(data=df, x="epochs", y='MSE', hue='network type', args=args)
 else:
     df = pd.DataFrame(result, columns = ['epochs','MSE','representation_mean', 'ef_dimension', 'scale_test'])

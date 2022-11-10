@@ -6,7 +6,7 @@ def config_parser():
     parser.add_argument("--batch_size", action = "store", default = 128, type = int)
     parser.add_argument("--num_samples", action = "store", default = 1000, type = int)
     parser.add_argument("--num_seeds", action = "store", default = 5, type = int)
-    parser.add_argument("--total_epoch", action = "store", default = 12, type = int)
+    parser.add_argument("--total_epoch", action = "store", default = 20, type = int)
     parser.add_argument("--pickle_type", action = "store", default = 1, type = int)
     parser.add_argument("--learning_rate", action = "store", default = 0.001, type = float)
     parser.add_argument("--hidden_size", action = "store", default = "32 32 1", help = "hidden size for mlp, input as a string with \

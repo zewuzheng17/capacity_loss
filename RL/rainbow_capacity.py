@@ -17,7 +17,6 @@ from tianshou.data import PrioritizedVectorReplayBuffer
 
 def setup_seed(seed):
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
 
 
 @ray.remote(num_gpus=0.3)
@@ -58,17 +57,18 @@ def test_capacity(args, buffer) -> list[tuple]:
     supports = torch.tensor(np.array([[support]])).detach().to('cuda')
     training_data, _ = buffer.sample(int(args.supervised_data_size)) # .sample(batch_size=args.supervised_data_size)
     training_data = training_data.obs
+
+    with torch.no_grad():
+        logit, _, _, _, _ = net_random(training_data)
+        # logit = logit.to('cuda')
+        label = torch.sum(logit * supports, dim=2)
+
     with tqdm(range(0, args.test_capacity_length)) as t:
         for i in t:
             # get checkpoint
             checkpoint = torch.load(
                 os.path.join(path_dict['policy'],
                              "policy_i{}_s{}_{}.pth".format(args.add_infer, args.policy_save_seed, i + 1)))
-
-            with torch.no_grad():
-                logit, _, _, _ = net_random(training_data)
-                # logit = logit.to('cuda')
-                label = torch.sum(logit*supports, dim=2)
 
             # load optimizer state and network parameters from checkpoint
             net.load_state_dict(checkpoint['model'])
@@ -77,26 +77,32 @@ def test_capacity(args, buffer) -> list[tuple]:
 
             # train for test capacity
             lossed = 0
+            with torch.no_grad():
+                logits_init, _, _, _, _ = net(training_data)
+                output_init = torch.sum(logits_init * supports, dim=2)
+                loss_init = torch.mean(torch.sum(torch.pow(output_init - label, 2), dim=1))
+                loss_init = loss_init.item()
+                print("Initial loss:", loss_init)
+
             for j in range(args.supervised_epoch):
                 idx = np.random.choice(args.supervised_data_size - 1, size=args.test_batch_size, replace=True)
                 batch = training_data[idx]
                 labels = label[idx]
                 optim.zero_grad()
-                logits, _, _, _ = net(batch)
+                logits, _, _, _ , _= net(batch)
                 output = torch.sum(logits * supports, dim=2)
-                # if j == 1:
-                #     print("label:", labels, "output:", output)
                 loss = torch.sum(torch.pow(output - labels, 2), dim = 1)
                 loss = torch.mean(loss)
+
                 loss.backward()
                 torch.nn.utils.clip_grad_value_(net.parameters(), 40)
                 optim.step()
                 if j >= args.supervised_epoch - 10:
                     lossed += loss.item()
             t.set_postfix({"loss": lossed / 10})
-            total_loss.append((i, lossed / 10))
-        total_loss_smoothed = smooth(total_loss)
-        return total_loss_smoothed
+            total_loss.append((i, lossed / 10, loss_init))
+        # total_loss_smoothed = smooth(total_loss)
+        return total_loss
 
 
 def test_dimension(args, buffer) -> list[tuple]:
@@ -130,9 +136,10 @@ def test_dimension(args, buffer) -> list[tuple]:
 
         # get effective dimension
         with torch.no_grad():
-            _, _, net_represent, _ = net_r(representaion_data)
+            _, _, net_represent, _ , _= net_r(representaion_data)
             singular_values = np.array(torch.linalg.svdvals(net_represent))
-            effective_dimension = np.sum((singular_values / np.max(singular_values)) > 0.01)
+            effective_dimension = np.sum((singular_values) > 0.01)
+            # print("max dim:", np.max(singular_values))
             total_effective_dimension.append((i, effective_dimension))
     return total_effective_dimension
 
@@ -141,6 +148,7 @@ if __name__ == "__main__":
     ray.init(num_cpus=10)
     args = get_args()
     args.add_infer = int(args.add_infer)
+    args.algo_name = 'rainbow'
     path_dict = create_path_dict(args)
     ## get env action_shape and state_shape
     env, train_envs, test_envs = make_atari_env(
@@ -155,10 +163,9 @@ if __name__ == "__main__":
     args.action_shape = env.action_space.shape or env.action_space.n
 
     buffer_total = PrioritizedVectorReplayBuffer.load_hdf5(os.path.join(path_dict['buffer'],
-                                                                  "data_i{}_s{}_{}.hdf5".format(args.add_infer,
-                                                                                                args.policy_save_seed,
-                                                                                                1)))
-
+                                                                  "data_i{}_s{}.hdf5".format(args.add_infer,
+                                                                                                args.policy_save_seed)))
+    # #
     result_loss = ray.get([test_capacity.remote(args, buffer_total) for i in range(5)])
     total_result_loss = reduce(lambda x, y: x + y, result_loss)
     total_result_dimension = test_dimension(args, buffer_total)
