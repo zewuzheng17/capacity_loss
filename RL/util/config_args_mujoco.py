@@ -3,9 +3,9 @@ import torch
 
 
 def get_args():
-    update_per_step = 1
+    update_per_step = 9
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default='FingerTurnHard-v1')
+    parser.add_argument("--task", type=str, default='FishSwim-v1')
     # HopperHop-v1, HumanoidRun-v1, FingerTurnHard-v1, FishSwim-v1, WalkerRun-v1
     parser.add_argument("--algo-name", type=str, default='sac')
     parser.add_argument("--dmc", type=bool, default=True)

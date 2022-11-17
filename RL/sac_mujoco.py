@@ -21,11 +21,10 @@ from tianshou.utils.net.continuous import ActorProb, Critic
 
 def test_sac(args=get_args()):
     # set random seeds
-    if args.device == 'cpu':
-        torch.set_num_threads(15)
+    torch.set_num_threads(15)
     args.seed = np.random.randint(100)
     print("seeds:", args.seed)
-
+    print("device:", args.device)
     env, train_envs, test_envs = make_mujoco_env(
         args.task, args.seed, args.training_num, args.test_num, obs_norm=False, dmc_control=args.dmc
     )
@@ -190,34 +189,30 @@ def test_sac(args=get_args()):
                 net_represent_p, hidden_p = policy.actor.preprocess(obs, state=None)
                 singular_values_q = np.array(torch.linalg.svdvals(net_represent_q).cpu())
                 singular_values_p = np.array(torch.linalg.svdvals(net_represent_p).cpu())
-                print(singular_values_p)
+                # print(singular_values_p)
                 abs_dimension_q = np.sum((singular_values_q) > 0.01)
-                abs_dimension_p = np.sum((singular_values_q) > 0.01)
-                effective_dimension_q = np.sum((singular_values_q / np.max(singular_values_q)) > 0.001)
-                effective_dimension_p = np.sum((singular_values_q / np.max(singular_values_p)) > 0.001)
+                abs_dimension_p = np.sum((singular_values_p) > 0.01)
+                effective_dimension_q = np.sum((singular_values_q / np.max(singular_values_q)) > 0.01)
+                effective_dimension_p = np.sum((singular_values_p / np.max(singular_values_p)) > 0.01)
 
             # compute the numbers of zero parameters in model
-            zeros_p = 0
-            effective_zeros_p = 0
-            zeros_q = 0
-            effective_zeros_q = 0
-            for param in policy.critic1.preprocess.parameters():
-                zeros_q += torch.sum(abs(param) < 1e-3).item()
-                effective_zeros_q += torch.sum((abs(param) / abs(torch.max(param))) < 1e-3).item()
-            for param in policy.actor.preprocess.parameters():
-                zeros_p += torch.sum(abs(param) < 1e-3).item()
-                effective_zeros_p += torch.sum((abs(param) / abs(torch.max(param))) < 1e-3).item()
-
-            total_params_q = sum(p.numel() for p in policy.critic1.preprocess.parameters())
-            total_params_p = sum(p.numel() for p in policy.actor.preprocess.parameters())
+            # zeros_p = 0
+            # effective_zeros_p = 0
+            # zeros_q = 0
+            # effective_zeros_q = 0
+            # for param in policy.critic1.preprocess.parameters():
+            #     zeros_q += torch.sum(abs(param) < 1e-3).item()
+            #     effective_zeros_q += torch.sum((abs(param) / abs(torch.max(param))) < 1e-3).item()
+            # for param in policy.actor.preprocess.parameters():
+            #     zeros_p += torch.sum(abs(param) < 1e-3).item()
+            #     effective_zeros_p += torch.sum((abs(param) / abs(torch.max(param))) < 1e-3).item()
+            #
+            # total_params_q = sum(p.numel() for p in policy.critic1.preprocess.parameters())
+            # total_params_p = sum(p.numel() for p in policy.actor.preprocess.parameters())
             log_data = {"capacity/abs_dimension_q": abs_dimension_q,
                         "capacity/abs_dimension_p": abs_dimension_p,
-                        "capacity/percent_zero_weights_q": zeros_q / total_params_q,
-                        "capacity/percent_zero_weights_p": zeros_p / total_params_p,
                         "capacity/effective_dimension_q": effective_dimension_q,
-                        "capacity/effective_dimension_p": effective_dimension_p,
-                        "capacity/effective_zeros_q": effective_zeros_q / total_params_q,
-                        "capacity/effective_zeros_p": effective_zeros_p / total_params_p}
+                        "capacity/effective_dimension_p": effective_dimension_p}
             # print("total p:", total_params_p, "total q:", total_params_q)
             logger.write("test/epochs", epochs, log_data)
 

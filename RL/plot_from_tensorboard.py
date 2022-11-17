@@ -26,9 +26,7 @@ data_path_dict = {
 #     "SAC + reset, RR=1": ["True0", "True1", "True2"],
 # }
 
-plot_type_list = ['update/loss/ratio', 'train/reward', 'capacity/abs_dimension_p',
-                  'capacity/abs_dimension_q',
-                  'capacity/percent_zero_weights_p', 'capacity/percent_zero_weights_q']   # 'update/loss/critic1', 'update/loss/critic1_test',,,
+plot_type_list = ['test/reward', 'update/loss/ratio']
 
 """
     input the path that contains tensor log, and subfolder,
@@ -81,9 +79,9 @@ for plot_type in plot_type_list:
         df = df[(df['types'] == "SAC, RR=9") | (df['types'] == "SAC, RR=1")]  #
         df['steps'][df['types'] == "SAC, RR=9"] /= 9
     sns.lineplot(x="steps", y=plot_type.replace("/", " "), data=df, hue="types", style="types", dashes=dash_dict)
-    plt.title("plots for {}".format(plot_type.replace("/", " ")))
+    plt.title("{}, plots for {}".format(args.task, plot_type.replace("/", " ")))
     if re.search("ratio", plot_type):
         plt.ylim(0, 10)
     plt.legend(loc="upper left", fontsize="x-small")
     print("saving plots")
-    fig.savefig(os.path.join(picture_path, "{}.png".format(plot_type.replace("/", "_"))))
+    fig.savefig(os.path.join(picture_path, "{}_{}.png".format(args.task, plot_type.replace("/", "_"))))
