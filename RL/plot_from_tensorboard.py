@@ -82,6 +82,6 @@ for plot_type in plot_type_list:
     plt.title("{}, plots for {}".format(args.task, plot_type.replace("/", " ")))
     if re.search("ratio", plot_type):
         plt.ylim(0, 10)
-    plt.legend(loc="upper left", fontsize="x-small")
-    print("saving plots")
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), fontsize='small', ncol=2)
+    plt.tight_layout()
     fig.savefig(os.path.join(picture_path, "{}_{}.png".format(args.task, plot_type.replace("/", "_"))))

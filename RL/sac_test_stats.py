@@ -4,6 +4,7 @@ import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import pickle
 from tqdm import tqdm
 from util.config_args_mujoco import get_args
 from util.utils import create_path_dict
@@ -47,17 +48,19 @@ def test_stats(actor, critic, path_dict):
                     net_represent_p, hidden_p = actor.preprocess(obs, state=None)
                     singular_values_q = np.array(torch.linalg.svdvals(net_represent_q).cpu())
                     singular_values_p = np.array(torch.linalg.svdvals(net_represent_p).cpu())
-
                     # get effective dimension of actor and critic
                     effective_dimension_q = np.sum((singular_values_q / np.max(singular_values_q)) > 0.01)
                     effective_dimension_p = np.sum((singular_values_p / np.max(singular_values_p)) > 0.01)
 
                     # get srank for actor and critic
-                    srank_q_idx = np.array([(np.sum(singular_values_q[:i + 1]) / np.sum(singular_values_q)) > 0.99 for i in
-                                   range(len(singular_values_q))])
+                    srank_q_idx = np.array(
+                        [(np.sum(singular_values_q[:i + 1]) / np.sum(singular_values_q)) > 0.99 for i in
+                         range(len(singular_values_q))])
+
                     srank_q = np.where(srank_q_idx == 1)[0][0]
-                    srank_p_idx = np.array([(np.sum(singular_values_p[:i + 1]) / np.sum(singular_values_p)) > 0.99 for i in
-                                   range(len(singular_values_p))])
+                    srank_p_idx = np.array(
+                        [(np.sum(singular_values_p[:i + 1]) / np.sum(singular_values_p)) > 0.99 for i in
+                         range(len(singular_values_p))])
                     srank_p = np.where(srank_p_idx == 1)[0][0]
                     if seeds / 3 < 1 and reset == 0:
                         loc = "SAC, RR=1"
@@ -92,7 +95,8 @@ def plot_fig_single(data, xlabel, ylabel, title, save_destination):
 
     sns.lineplot(x=xlabel, y=ylabel, data=df, hue="type", style="type", dashes=dash_dict)
     plt.title(title)
-    plt.legend(loc="upper left", fontsize="x-small")
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), fontsize='small', ncol = 2)
+    plt.tight_layout()
     fig.savefig(save_destination)
 
 
@@ -132,13 +136,23 @@ if __name__ == "__main__":
     srankp, srankq, efp, efq = test_stats(actor, critic1, path_dict)
     plot_fig_single(srankp, "epochs", "srank actor", "srank for {}".format(args.task),
                     os.path.join(path_dict['picture'],
-                    '{}_srank_p.png'.format(args.task)))
+                                 '{}_srank_p.png'.format(args.task)))
     plot_fig_single(srankq, "epochs", "srank critic", "srank for {}".format(args.task),
                     os.path.join(path_dict['picture'],
-                    '{}_srank_q.png'.format(args.task)))
+                                 '{}_srank_q.png'.format(args.task)))
     plot_fig_single(efp, "epochs", "effective dimension actor", "effective dimension for {}".format(args.task),
                     os.path.join(path_dict['picture'],
-                    '{}_ef_p.png'.format(args.task)))
+                                 '{}_ef_p.png'.format(args.task)))
     plot_fig_single(efq, "epochs", "effective dimension critic", "effective dimension for {}".format(args.task),
                     os.path.join(path_dict['picture'],
-                    '{}_ef_q.png'.format(args.task)))
+                                 '{}_ef_q.png'.format(args.task)))
+
+    # save stats
+    with open(os.path.join(path_dict['data'], '{}_srank_p.pkl'.format(args.task)), 'wb') as f:
+        pickle.dump(srankp, f)
+    with open(os.path.join(path_dict['data'], '{}_srank_q.pkl'.format(args.task)), 'wb') as f:
+        pickle.dump(srankq, f)
+    with open(os.path.join(path_dict['data'], '{}_ef_p.pkl'.format(args.task)), 'wb') as f:
+        pickle.dump(efp, f)
+    with open(os.path.join(path_dict['data'], '{}_ef_q.pkl'.format(args.task)), 'wb') as f:
+        pickle.dump(efq, f)
